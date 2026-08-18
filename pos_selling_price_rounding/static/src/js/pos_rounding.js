@@ -2,17 +2,39 @@ odoo.define('pos_selling_price_rounding.pos_rounding', function (require) {
     "use strict";
 
     var models = require('point_of_sale.models');
+    const Orderline = require('point_of_sale.Orderline');
+    const Registries = require('point_of_sale.Registries');
 
     // Ensure our new fields are loaded into the POS configuration
     models.load_fields('pos.config', ['enable_rounding_price', 'rounding_value', 'enable_cashier_rounding', 'rounding_cashier_ids']);
 
     var _orderline_proto = models.Orderline.prototype;
     models.Orderline = models.Orderline.extend({
+        initialize: function(attr, options) {
+            _orderline_proto.initialize.apply(this, arguments);
+            this.is_rounding_enabled = options && options.is_rounding_enabled !== undefined ? options.is_rounding_enabled : true;
+            this.raw_discount = options && options.raw_discount !== undefined ? options.raw_discount : 0;
+        },
+        export_as_JSON: function() {
+            var json = _orderline_proto.export_as_JSON.apply(this, arguments);
+            json.is_rounding_enabled = this.is_rounding_enabled;
+            json.raw_discount = this.raw_discount;
+            return json;
+        },
+        init_from_JSON: function(json) {
+            _orderline_proto.init_from_JSON.apply(this, arguments);
+            this.is_rounding_enabled = json.is_rounding_enabled !== undefined ? json.is_rounding_enabled : true;
+            this.raw_discount = json.raw_discount !== undefined ? json.raw_discount : 0;
+        },
         set_discount: function (discount) {
+            if (!this._is_rounding) {
+                this.raw_discount = parseFloat(discount) || 0;
+            }
+
             var config = this.pos.config;
 
-            // If the feature is not enabled, use standard behavior
-            if (!config.enable_rounding_price || config.rounding_value <= 0 || this._is_rounding) {
+            // If the feature is not enabled or line rounding is disabled, use standard behavior
+            if (!config.enable_rounding_price || config.rounding_value <= 0 || this._is_rounding || this.is_rounding_enabled === false) {
                 _orderline_proto.set_discount.apply(this, arguments);
                 return;
             }
@@ -50,17 +72,31 @@ odoo.define('pos_selling_price_rounding.pos_rounding', function (require) {
                     }
 
                     // Recalculate effective discount to match rounded price exactly
-                    // rounded_price = base_price * (1 - effective_disc / 100)
-                    // effective_disc = (1 - rounded_price / base_price) * 100
                     var effective_disc = (1 - rounded_price / base_price) * 100;
 
                     // Apply the adjusted discount percentage.
-                    // This keeps the discount visible and updated to follow rounding.
                     _orderline_proto.set_discount.call(this, effective_disc);
                 }
             } finally {
                 this._is_rounding = false;
             }
         },
+        toggle_rounding: function () {
+            this.is_rounding_enabled = !this.is_rounding_enabled;
+            var disc_to_apply = this.raw_discount !== undefined ? this.raw_discount : (this.get_discount() || 0);
+            this.set_discount(disc_to_apply);
+            this.trigger('change', this);
+        },
     });
+
+    const PosRoundingOrderline = Orderline => class extends Orderline {
+        onToggleRounding(ev) {
+            ev.stopPropagation();
+            this.props.line.toggle_rounding();
+        }
+    };
+
+    Registries.Component.extend(Orderline, PosRoundingOrderline);
+
+    return PosRoundingOrderline;
 });

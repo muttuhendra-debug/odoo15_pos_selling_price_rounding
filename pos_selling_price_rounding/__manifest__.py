@@ -12,6 +12,7 @@
     'assets': {
         'point_of_sale.assets': [
             'pos_selling_price_rounding/static/src/js/pos_rounding.js',
+            'pos_selling_price_rounding/static/src/xml/Orderline.xml',
         ],
     },
     'installable': True,
