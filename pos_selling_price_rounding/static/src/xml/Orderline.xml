@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="Orderline" t-inherit="point_of_sale.Orderline" t-inherit-mode="extension" owl="1">
+        <xpath expr="//span[hasclass('price')]" position="before">
+            <t t-if="env.pos.config &amp;&amp; env.pos.config.enable_rounding_price">
+                <input type="checkbox"
+                       class="pos-rounding-checkbox"
+                       t-att-checked="props.line.is_rounding_enabled"
+                       t-on-change="onToggleRounding"
+                       t-on-click.stop=""
+                       style="margin-right: 5px; cursor: pointer; vertical-align: middle;"
+                       title="Enable/Disable Price Rounding"/>
+            </t>
+        </xpath>
+    </t>
+</templates>
